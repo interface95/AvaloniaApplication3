@@ -1,0 +1,100 @@
+name: Build macOS DMG
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+        include-prerelease: true
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Publish for macOS ARM64 with AOT
+      run: dotnet publish AvaloniaApplication3/AvaloniaApplication3.csproj -r osx-arm64 -c Release -p:PublishAot=true
+
+    - name: Create .app bundle
+      run: |
+        # Create app bundle structure
+        mkdir -p "AvaloniaApplication3.app/Contents/MacOS"
+        mkdir -p "AvaloniaApplication3.app/Contents/Resources"
+
+        # Create Info.plist
+        cat > AvaloniaApplication3.app/Contents/Info.plist << 'EOF'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+        	<key>CFBundleExecutable</key>
+        	<string>AvaloniaApplication3</string>
+        	<key>CFBundleIconFile</key>
+        	<string>icon</string>
+        	<key>CFBundleIdentifier</key>
+        	<string>com.example.AvaloniaApplication3</string>
+        	<key>CFBundleName</key>
+        	<string>AvaloniaApplication3</string>
+        	<key>CFBundlePackageType</key>
+        	<string>APPL</string>
+        	<key>CFBundleShortVersionString</key>
+        	<string>1.0</string>
+        	<key>CFBundleVersion</key>
+        	<string>1</string>
+        	<key>LSMinimumSystemVersion</key>
+        	<string>10.15</string>
+        	<key>NSHighResolutionCapable</key>
+        	<true/>
+        	<key>NSHumanReadableCopyright</key>
+        	<string>Copyright © 2024. All rights reserved.</string>
+        </dict>
+        </plist>
+        EOF
+
+        # Copy published files to app bundle
+        cp -r AvaloniaApplication3/bin/Release/net9.0/osx-arm64/publish/* AvaloniaApplication3.app/Contents/MacOS/
+
+        # Make executable
+        chmod +x AvaloniaApplication3.app/Contents/MacOS/AvaloniaApplication3
+
+    - name: Create DMG
+      run: |
+        # Create DMG contents directory
+        mkdir -p dmg_contents
+        cp -R AvaloniaApplication3.app dmg_contents/
+
+        # Create symbolic link to Applications
+        ln -s /Applications dmg_contents/Applications
+
+        # Create DMG
+        hdiutil create -volname "AvaloniaApplication3" -srcfolder dmg_contents -ov -format UDZO AvaloniaApplication3.dmg
+
+    - name: Upload DMG artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: AvaloniaApplication3-macOS-ARM64
+        path: AvaloniaApplication3.dmg
+        retention-days: 30
+
+    - name: Upload DMG to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: AvaloniaApplication3.dmg
+        asset_name: AvaloniaApplication3-macOS-ARM64.dmg
+        asset_content_type: application/octet-stream
