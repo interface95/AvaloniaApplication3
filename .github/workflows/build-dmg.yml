@@ -29,12 +29,19 @@ jobs:
 
     - name: Create .app bundle
       run: |
+        # Extract version from tag (remove 'v' prefix)
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "Building version: $VERSION"
+
         # Create app bundle structure
         mkdir -p "AvaloniaApplication3.app/Contents/MacOS"
         mkdir -p "AvaloniaApplication3.app/Contents/Resources"
 
-        # Create Info.plist
-        cat > AvaloniaApplication3.app/Contents/Info.plist << 'EOF'
+        # Copy published files to app bundle
+        cp -r AvaloniaApplication3/bin/Release/net9.0/osx-arm64/publish/* AvaloniaApplication3.app/Contents/MacOS/
+
+        # Create Info.plist with dynamic version
+        cat > AvaloniaApplication3.app/Contents/Info.plist << EOF
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
@@ -47,12 +54,16 @@ jobs:
         	<string>com.example.AvaloniaApplication3</string>
         	<key>CFBundleName</key>
         	<string>AvaloniaApplication3</string>
+        	<key>CFBundleDisplayName</key>
+        	<string>AvaloniaApplication3</string>
         	<key>CFBundlePackageType</key>
         	<string>APPL</string>
-        	<key>CFBundleShortVersionString</key>
-        	<string>1.0</string>
         	<key>CFBundleVersion</key>
-        	<string>1</string>
+        	<string>$VERSION</string>
+        	<key>CFBundleShortVersionString</key>
+        	<string>$VERSION</string>
+        	<key>CFBundleInfoDictionaryVersion</key>
+        	<string>6.0</string>
         	<key>LSMinimumSystemVersion</key>
         	<string>10.15</string>
         	<key>NSHighResolutionCapable</key>
@@ -63,11 +74,17 @@ jobs:
         </plist>
         EOF
 
-        # Copy published files to app bundle
-        cp -r AvaloniaApplication3/bin/Release/net9.0/osx-arm64/publish/* AvaloniaApplication3.app/Contents/MacOS/
-
         # Make executable
         chmod +x AvaloniaApplication3.app/Contents/MacOS/AvaloniaApplication3
+
+        # Remove debug symbols if they exist
+        rm -rf AvaloniaApplication3.app/Contents/MacOS/AvaloniaApplication3.dSYM || true
+
+        # Sign with ad-hoc signature for distribution
+        codesign --force --deep --sign - AvaloniaApplication3.app
+
+        # Verify signing
+        codesign --verify --verbose AvaloniaApplication3.app
 
     - name: Create DMG
       run: |
