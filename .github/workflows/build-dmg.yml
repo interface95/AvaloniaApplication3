@@ -2,11 +2,8 @@ name: Build macOS DMG
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  release:
-    types: [ published ]
+    tags:
+      - 'v*'
 
 jobs:
   build-macos:
@@ -88,13 +85,12 @@ jobs:
         path: AvaloniaApplication3.dmg
         retention-days: 30
 
-    - name: Upload DMG to release
-      if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: AvaloniaApplication3.dmg
+        name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: AvaloniaApplication3.dmg
-        asset_name: AvaloniaApplication3-macOS-ARM64.dmg
-        asset_content_type: application/octet-stream
